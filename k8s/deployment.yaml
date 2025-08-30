@@ -11,6 +11,10 @@ spec:
     metadata:
       labels: { app: wallet-api }
     spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: busybox
+          command: ['sh','-c','until nc -z my-postgres-postgresql 5432; do echo waiting for db; sleep 2; done']
       containers:
         - name: api
           image: jhonathan0297/wallet-api:latest

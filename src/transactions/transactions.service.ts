@@ -27,10 +27,12 @@ export class TransactionsService {
     private readonly usersRepo: UsersRepository,
     private readonly ds: DataSource,
     private readonly fraud: FraudService,
-  ) { }
+  ) {}
 
   async create(input: CreateTxInput): Promise<Transaction> {
-    this.logger.debug(`create payload tx=${input.transaction_id} user=${input.user_id}`);
+    this.logger.debug(
+      `create payload tx=${input.transaction_id} user=${input.user_id}`,
+    );
     const amountCents = Number(input.amount);
     if (!Number.isInteger(amountCents) || amountCents <= 0) {
       throw new BadRequestException(
@@ -55,7 +57,7 @@ export class TransactionsService {
         user = manager.getRepository(User).create({
           externalId: input.user_id,
           balanceCents: '0',
-        })
+        });
         await manager.getRepository(User).save(user);
         user = await manager
           .getRepository(User)
@@ -77,13 +79,12 @@ export class TransactionsService {
         this.logger.warn(
           `Fondos insuficientes tx=${input.transaction_id} user=${input.user_id} current=${current} withdraw=${amountCents}`,
         );
-        throw new BadRequestException('Fondos insuficientes')
-      };
+        throw new BadRequestException('Fondos insuficientes');
+      }
 
-      await manager.getRepository(User).update(
-        { id: user.id },
-        { balanceCents: String(next) },
-      );
+      await manager
+        .getRepository(User)
+        .update({ id: user.id }, { balanceCents: String(next) });
 
       const tx = manager.getRepository(Transaction).create({
         transactionId: input.transaction_id,
@@ -99,8 +100,9 @@ export class TransactionsService {
         order: { createdAt: 'DESC' },
         take: 10,
       });
+      const recentList = Array.isArray(recent) ? recent : [];
       void this.fraud.evaluateRecent(
-        recent.map((r) => ({
+        recentList.map((r) => ({
           userId: r.userId,
           amountCents: Number(r.amountCents),
           type: r.type,
@@ -123,7 +125,7 @@ export class TransactionsService {
     offset = 0,
   ) {
     const user = await this.usersRepo.findByExternalId(externalId);
-    if(!user) throw new NotFoundException('User not found');
+    if (!user) throw new NotFoundException('User not found');
     const qb = this.txRepo
       .createQueryBuilder('t')
       .where('t.user_id = :userId', { userId: user.id });
