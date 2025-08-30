@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wallet-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: wallet-api }
+  template:
+    metadata:
+      labels: { app: wallet-api }
+    spec:
+      containers:
+        - name: api
+          image: your-docker-user/wallet-api:latest
+          ports:
+          - containerPort: 3000
+          envFrom:
+          - configMapRef: { name: wallet-config }
+          - secretRef: { name: wallet-secret }
+          readinessProbe:
+            httpGet: { path: /api/health, port: 3000 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /api/health, port: 3000 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
