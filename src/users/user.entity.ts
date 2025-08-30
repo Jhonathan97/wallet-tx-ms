@@ -13,8 +13,8 @@ export class User {
   id: string;
 
   @Index({ unique: true })
-  @Column({ type: 'varchar', length: 64, nullable: true, unique: true })
-  external_id?: string | null;
+  @Column({ type: 'varchar', length: 64, name: 'external_id', nullable: false, unique: true })
+  externalId?: string | null;
 
   @Column({ type: 'bigint', name: 'balance_cents', default: 0 })
   balanceCents: string;

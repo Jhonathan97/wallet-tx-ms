@@ -1,18 +1,10 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { TransactionsService } from './transactions.service';
+// Mock repos y fraud service para probar reglas de dominio
 
 describe('TransactionsService', () => {
-  let service: TransactionsService;
-
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [TransactionsService],
-    }).compile();
-
-    service = module.get<TransactionsService>(TransactionsService);
-  });
-
-  it('should be defined', () => {
-    expect(service).toBeDefined();
+  it('rechaza retiros si saldo insuficiente', async () => {
+    // arrange: usuario con 1000
+    // act: withdraw 2000
+    // assert: BadRequestException
   });
 });

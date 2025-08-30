@@ -8,10 +8,21 @@ export class UsersRepository extends Repository<User> {
     super(User, dataSource.createEntityManager());
   }
 
+  findByExternalId(externalId: string){
+    return this.findOne({ where: { externalId } });
+  }
+
   async lockUserForUpdate(userId: string) {
     return this.createQueryBuilder('u')
       .setLock('pessimistic_write')
       .where('u.id = :userId', { userId })
+      .getOne();
+  }
+
+  async lockByExternalIdForUpdate(externalId: string) {
+    return this.createQueryBuilder('u')
+      .setLock('pessimistic_write')
+      .where('u.external_id = :externalId', { externalId })
       .getOne();
   }
 }

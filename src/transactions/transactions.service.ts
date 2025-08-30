@@ -9,6 +9,7 @@ import { TransactionsRepository } from './transactions.repository';
 import { UsersRepository } from '../users/users.repository';
 import { Transaction } from './transaction.entity';
 import { FraudService } from '../fraud/fraud.service';
+import { User } from 'src/users/user.entity';
 
 interface CreateTxInput {
   transaction_id: string;
@@ -26,10 +27,10 @@ export class TransactionsService {
     private readonly usersRepo: UsersRepository,
     private readonly ds: DataSource,
     private readonly fraud: FraudService,
-  ) {}
+  ) { }
 
   async create(input: CreateTxInput): Promise<Transaction> {
-    console.log('create', input);
+    this.logger.debug(`create payload tx=${input.transaction_id} user=${input.user_id}`);
     const amountCents = Number(input.amount);
     if (!Number.isInteger(amountCents) || amountCents <= 0) {
       throw new BadRequestException(
@@ -43,7 +44,7 @@ export class TransactionsService {
     if (existing) return existing;
 
     return await this.ds.transaction('SERIALIZABLE', async (manager) => {
-      const user = await manager
+      let user = await manager
         .getRepository('User')
         .createQueryBuilder('u')
         .setLock('pessimistic_write')
@@ -51,39 +52,42 @@ export class TransactionsService {
         .getOne();
 
       if (!user) {
-        await manager.query(
-          'INSERT INTO users(id, balance_cents) VALUES ($1,$2) ON CONFLICT DO NOTHING',
-          [input.user_id, 0],
-        );
+        user = manager.getRepository(User).create({
+          externalId: input.user_id,
+          balanceCents: '0',
+        })
+        await manager.getRepository(User).save(user);
+        user = await manager
+          .getRepository(User)
+          .createQueryBuilder('u')
+          .setLock('pessimistic_write')
+          .where('u.id = :userId', { userId: user.id })
+          .getOne();
       }
 
-      const row = await manager
-        .getRepository('User')
-        .createQueryBuilder('u')
-        .setLock('pessimistic_write')
-        .where('u.id = :userId', { userId: input.user_id })
-        .getOne();
+      if (!user) throw new NotFoundException('User not found after creation');
 
-      if (!row) throw new NotFoundException('User not found after creation');
-
-      const current = Number(row.balanceCents);
+      const current = Number(user.balanceCents);
       const next =
         input.type === 'deposit'
           ? current + amountCents
           : current - amountCents;
-      if (next < 0) throw new BadRequestException('Fondos insuficientes');
 
-      // actualizar saldo
-      await manager
-        .createQueryBuilder()
-        .update('users')
-        .set({ balanceCents: String(next) })
-        .where('id = :id', { id: input.user_id })
-        .execute();
+      if (next < 0) {
+        this.logger.warn(
+          `Fondos insuficientes tx=${input.transaction_id} user=${input.user_id} current=${current} withdraw=${amountCents}`,
+        );
+        throw new BadRequestException('Fondos insuficientes')
+      };
+
+      await manager.getRepository(User).update(
+        { id: user.id },
+        { balanceCents: String(next) },
+      );
 
       const tx = manager.getRepository(Transaction).create({
         transactionId: input.transaction_id,
-        userId: input.user_id,
+        userId: user.id,
         amountCents: String(amountCents),
         type: input.type,
         occurredAt: new Date(input.timestamp),
@@ -105,22 +109,24 @@ export class TransactionsService {
       );
 
       this.logger.log(
-        `TX ${input.type} ${amountCents} user=${input.user_id} ok`,
+        `OK tx=${input.transaction_id} extUser=${input.user_id} type=${input.type} amount=${amountCents} newBalance=${next}`,
       );
       return saved;
     });
   }
 
-  async getHistory(
-    userId: string,
+  async getHistoryByExternalId(
+    externalId: string,
     from?: Date,
     to?: Date,
     limit = 50,
     offset = 0,
   ) {
+    const user = await this.usersRepo.findByExternalId(externalId);
+    if(!user) throw new NotFoundException('User not found');
     const qb = this.txRepo
       .createQueryBuilder('t')
-      .where('t.user_id = :userId', { userId });
+      .where('t.user_id = :userId', { userId: user.id });
     if (from) qb.andWhere('t.created_at >= :from', { from });
     if (to) qb.andWhere('t.created_at < :to', { to });
     return qb
@@ -130,7 +136,7 @@ export class TransactionsService {
       .getMany();
   }
 
-  async getBalance(userId: string): Promise<number> {
+  async getBalanceByExternalId(userId: string): Promise<number> {
     const user = await this.usersRepo.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
     return Number(user.balanceCents) / 100;

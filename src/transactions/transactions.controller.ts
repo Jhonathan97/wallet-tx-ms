@@ -19,8 +19,6 @@ export class TransactionsController {
   @Post()
   @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
   create(@Body() dto: CreateTransactionDto) {
-    console.log('llego aca');
-    console.log(dto);
     return this.service.create(dto);
   }
 
@@ -30,11 +28,11 @@ export class TransactionsController {
     const to = q.to ? new Date(q.to) : undefined;
     const limit = q.limit ? Number(q.limit) : 50;
     const offset = q.offset ? Number(q.offset) : 0;
-    return this.service.getHistory(userId, from, to, limit, offset);
+    return this.service.getHistoryByExternalId(userId, from, to, limit, offset);
   }
 
   @Get(':userId/balance')
   getBalance(@Param('userId') userId: string) {
-    return this.service.getBalance(userId);
+    return this.service.getBalanceByExternalId(userId);
   }
 }

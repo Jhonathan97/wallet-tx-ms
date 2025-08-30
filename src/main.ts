@@ -4,7 +4,11 @@ import {
   FastifyAdapter,
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { Logger} from 'nestjs-pino';
+import fastifyStatic from '@fastify/static';
+
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -14,7 +18,18 @@ async function bootstrap() {
   );
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.setGlobalPrefix('api');
-  await app.listen({ port: Number(process.env.PORT) ?? 3000, host: '0.0.0.0' });
-  new Logger('Bootstrap').log(`Listening on ${await app.getUrl()}`);
+  const config = new DocumentBuilder()
+    .setTitle('Wallet Transactions API')
+    .setDescription(
+      'Microservice API para procesar transacciones (deposit/withdraw)',
+    )
+    .setVersion('1.0.0')
+    .build();
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api/docs', app, document);
+  const port = parseInt( process.env.PORT ?? '3000', 10);
+  await app.listen({ port, host: '0.0.0.0' });
+  app.useLogger(app.get(Logger));
+  //app.log(`Listening on ${await app.getUrl()}`);
 }
 bootstrap();
