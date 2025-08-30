@@ -112,7 +112,7 @@ Regla simple en FraudService:
 
 
 
-# 🐳 Docker corren en local (sin k8s)
+# 🐳 Deploy Docker  local (sin k8s)
 ```
 npm install
 docker compose up -d postgres
@@ -126,7 +126,7 @@ DB_PASSWORD=wallet
 DB_NAME=wallet
 ```
 
-# 🚀 Deploy a Kubernetes (k8s)
+# 🚀 Deploy  Kubernetes (k8s)
 
 ### Prerrequisitos
 
