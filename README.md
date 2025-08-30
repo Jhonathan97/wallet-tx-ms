@@ -29,27 +29,8 @@
 
 Microservicio de billetera digital que procesa depósitos/retiros, mantiene saldo por usuario, registra el historial de transacciones y expone APIs REST. Incluye validaciones, idempotencia por `transaction_id`, concurrencia segura, regla antifraude simple, logs con pino, contenedores Docker y manifests Kubernetes.
 
----
 
-## 📑 Tabla de contenido
-- [Arquitectura y decisiones](#arquitectura-y-decisiones)
-- [Esquema de datos](#esquema-de-datos)
-- [API (REST)](#api-rest)
-- [Fraude (extra)](#fraude-extra)
-- [Logs (pino)](#logs-pino)
-- [Correr en local (sin K8s)](#correr-en-local-sin-k8s)
-- [Docker Compose (opcional)](#docker-compose-opcional)
-- [Kubernetes en local con Minikube](#kubernetes-en-local-con-minikube)
-- [Swagger / OpenAPI](#swagger--openapi)
-- [Pruebas](#pruebas)
-- [CI/CD (GitHub Actions)](#cicd-github-actions)
-- [Preguntas conceptuales](#preguntas-conceptuales)
-- [Seguridad y notas](#seguridad-y-notas)
-- [Troubleshooting](#troubleshooting)
-
----
-
-## 🏗️ Arquitectura y decisiones
+# 🏗️ Arquitectura y decisiones
 - **NestJS + Fastify** (rendimiento en IO).
 - **TypeORM + PostgreSQL** (relacional).
 - **Moneda en centavos (enteros)** para evitar errores de coma flotante.
@@ -61,12 +42,11 @@ Microservicio de billetera digital que procesa depósitos/retiros, mantiene sald
   - `transactions.user_id` → FK a `users.id`.
 - **Logs**: `@nestjs/pino` (JSON; pretty en dev).
 - **Antifraude**: regla simple → “3+ transacciones ≥ umbral en 5 min” → `logger.warn`.
-- **Migraciones**: no incluidas en esta entrega → en dev `synchronize: true`.
+.
 
 ---
 
-## 🗄️ Esquema de datos
-*(simplificado)*
+# 🗄️ Esquema de datos
 
 - **users**
   - id (PK)
@@ -82,7 +62,7 @@ Microservicio de billetera digital que procesa depósitos/retiros, mantiene sald
 
 ---
 
-## 🌐 API (REST)
+# 🌐 API (REST)
 
 ### Crear transacción
 ```http
@@ -94,3 +74,132 @@ POST /api/transactions
   "type": "deposit",
   "timestamp": "2025-08-27T16:00:00Z"
 }
+
+```
+### Historial por usuario
+```http
+GET /api/transactions/:externalId?limit=50&offset=0
+
+```
+
+### Saldo actual
+```http
+GET /api/transactions/:externalId/balance
+
+```
+
+### Health
+```http
+GET /api/health → { "status": "ok" }
+```
+
+# 🛡️ Esquema de datos
+Regla simple en FraudService:
+
+- Umbral: 200_00 (≈ $200.00 en centavos).
+
+- Ventana: 5 minutos.
+
+- Si hay ≥ 3 transacciones ≥ umbral en la ventana → logger.warn.
+
+- Extensible a SNS/Email/flag de auditoría.
+
+# 📜 Logs (pino)
+
+- Integracion con @nestjs/pino
+
+- Logs de negocio en TransactionsService
+
+
+
+# 🐳 Docker corren en local (sin k8s)
+```
+npm install
+docker compose up -d postgres
+npm run start:dev
+```
+```
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=wallet
+DB_PASSWORD=wallet
+DB_NAME=wallet
+```
+
+# 🚀 Deploy a Kubernetes (k8s)
+
+### Prerrequisitos
+
+- Docker
+
+- kubectl
+
+- Minikube
+
+- (Opcional) Helm (para levantar Postgres dentro del cluster)
+
+###  Manifests
+
+- ConfigMap: variables de entorno.
+
+- Secret: credenciales DB.
+
+- Deployment: wallet-api.
+
+- Service: tipo LoadBalancer → expone la API.
+
+- Helm: bitnami/postgresql para DB.
+
+### Rutas útiles Minikube
+```
+minikube service list
+minikube  start
+minikube service wallet-api --url
+```
+# 🧪  Pruebas unitarias 
+
+```
+npm run test
+
+``` 
+# ❓ Preguntas conceptuales
+
+### 1) ¿Cómo manejar picos altos de transacciones para garantizar escalabilidad?
+
+- Horizontal scaling con réplicas (HPA por CPU/RPS/latencia).
+
+- Desacople con colas (SQS/Kafka/Kinesis) + workers escalables.
+
+- Idempotencia para permitir reintentos.
+
+- DB gestionada (RDS) con réplicas de lectura.
+
+- Backpressure / Rate limiting.
+
+- Cache de lectura (Redis) para saldo/historial reciente.
+
+### 2) ¿Qué estrategias usarías para prevenir fraudes?
+
+- Reglas determinísticas (umbral, velocity, geolocalización, device fingerprint).
+
+- Límites diarios por usuario.
+
+- Detección en streaming + alertas.
+
+- ML supervisado (frecuencia/monto).
+
+- Controles KYC/AML, 2FA, auditoría.
+
+### 3) ¿Cómo mejorar rendimiento ante alta concurrencia?
+
+- Reducir contención (operaciones atómicas).
+
+- Minimizar ventana transaccional.
+
+- Índices adecuados.
+
+- Sharding por user_id o advisory locks.
+
+- Escalamiento horizontal app/DB.
+
+- Cache/batching/colas.
